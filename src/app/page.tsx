@@ -10,36 +10,56 @@ import {
   type CutSheetPhase,
   type CutSheetStageError,
 } from "@/lib/cutsheet/staged-flow";
-import type { DoubleCheckItem, EstimatorSummary, ExtractionResult, OptimizationResult } from "@/lib/cutsheet/types";
+import type {
+  CutSource,
+  DoubleCheckItem,
+  EstimatorSummary,
+  ExtractionResult,
+  OptimizationResult,
+} from "@/lib/cutsheet/types";
 
-const STAGES = [
-  { phase: "extracting", eyebrow: "Stage 01", title: "Claude extraction", detail: "POST /api/extract parses the deck scope into cut requirements." },
-  { phase: "optimizing", eyebrow: "Stage 02", title: "Browser optimization", detail: "Run First Fit Decreasing layouts against local stock fixtures." },
-  { phase: "summarizing", eyebrow: "Stage 03", title: "Claude estimator summary", detail: "POST /api/summarize turns extracted cuts and layouts into estimator guidance." },
-] as const;
+// ── Design tokens ──────────────────────────────────────────────────────────────
 
-const severityStyles: Record<DoubleCheckItem["severity"], string> = {
-  info: "border-sky-200 bg-sky-50 text-sky-900",
-  warning: "border-amber-200 bg-amber-50 text-amber-950",
-  review: "border-violet-200 bg-violet-50 text-violet-950",
+const SOURCE_COLORS: Record<CutSource, string> = {
+  beam:     "#f59e0b",
+  joist:    "#60a5fa",
+  rim:      "#34d399",
+  post:     "#f87171",
+  blocking: "#a78bfa",
+  stair:    "#fb923c",
+  misc:     "#71717a",
 };
 
-const runningPhases = new Set<CutSheetPhase>(["extracting", "optimizing", "summarizing"]);
+const SEVERITY_STYLES: Record<DoubleCheckItem["severity"], { wrap: string; label: string }> = {
+  info:    { wrap: "border-blue-800   bg-blue-950/40   text-blue-200",   label: "Info"    },
+  warning: { wrap: "border-amber-800  bg-amber-950/40  text-amber-200",  label: "Warning" },
+  review:  { wrap: "border-violet-800 bg-violet-950/40 text-violet-200", label: "Review"  },
+};
+
+const STAGES = [
+  { phase: "extracting"  as const, label: "Claude extraction"        },
+  { phase: "optimizing"  as const, label: "Browser optimization"     },
+  { phase: "summarizing" as const, label: "Claude estimator summary"  },
+];
+
+const RUNNING_PHASES = new Set<CutSheetPhase>(["extracting", "optimizing", "summarizing"]);
+
+// ── Root ───────────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [scopeText, setScopeText] = useState(SAMPLE_DECK_SCOPE);
+  const [scopeText, setScopeText]                 = useState(SAMPLE_DECK_SCOPE);
   const [validationMessage, setValidationMessage] = useState("");
-  const [phase, setPhase] = useState<CutSheetPhase>("idle");
-  const [error, setError] = useState<CutSheetStageError | null>(null);
-  const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
-  const [optimization, setOptimization] = useState<OptimizationResult | null>(null);
-  const [summary, setSummary] = useState<EstimatorSummary | null>(null);
+  const [phase, setPhase]                         = useState<CutSheetPhase>("idle");
+  const [error, setError]                         = useState<CutSheetStageError | null>(null);
+  const [extraction, setExtraction]               = useState<ExtractionResult | null>(null);
+  const [optimization, setOptimization]           = useState<OptimizationResult | null>(null);
+  const [summary, setSummary]                     = useState<EstimatorSummary | null>(null);
 
-  const isRunning = runningPhases.has(phase);
+  const isRunning = RUNNING_PHASES.has(phase);
   const completedStages = useMemo(
     () => ({
-      extracting: Boolean(extraction),
-      optimizing: Boolean(optimization),
+      extracting:  Boolean(extraction),
+      optimizing:  Boolean(optimization),
       summarizing: Boolean(summary),
     }),
     [extraction, optimization, summary],
@@ -53,7 +73,6 @@ export default function Home() {
       setError(null);
       return;
     }
-
     setValidationMessage("");
     setError(null);
     setExtraction(null);
@@ -62,21 +81,20 @@ export default function Home() {
 
     try {
       await runCutSheetStages(scopeText, {
-        onPhaseChange: setPhase,
-        onExtraction: setExtraction,
+        onPhaseChange:  setPhase,
+        onExtraction:   setExtraction,
         onOptimization: setOptimization,
-        onSummary: setSummary,
+        onSummary:      setSummary,
       });
     } catch (caught) {
       const stageError =
         caught instanceof CutSheetFlowError
           ? caught.toStageError()
-          : {
-              phase: phase === "optimizing" || phase === "summarizing" ? phase : "extracting",
-              code: "CUTSHEET_FLOW_FAILED",
+          : ({
+              phase:   phase === "optimizing" || phase === "summarizing" ? phase : "extracting",
+              code:    "CUTSHEET_FLOW_FAILED",
               message: "The CutSheet flow failed before it could complete.",
-            } satisfies CutSheetStageError;
-
+            } satisfies CutSheetStageError);
       setError(stageError);
       setPhase("error");
     }
@@ -88,273 +106,476 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_#dbeafe,_transparent_36%),linear-gradient(135deg,_#f8fafc_0%,_#eef2ff_48%,_#f8fafc_100%)] px-5 py-8 text-slate-950 sm:px-8 lg:px-10">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <header className="grid gap-6 rounded-[2rem] border border-white/70 bg-white/80 p-6 shadow-xl shadow-slate-200/60 backdrop-blur md:grid-cols-[1.15fr_0.85fr] md:p-8">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-[0.28em] text-blue-700">Atreyus CutSheet Demo</p>
-            <h1 className="mt-4 max-w-3xl text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">
-              Real deck scope to browser-optimized lumber order.
+    <div className="min-h-[100dvh] bg-[#09090b] text-zinc-50">
+      <div className="mx-auto max-w-7xl px-5 py-10 sm:px-8 lg:px-12">
+
+        {/* ── Header ── */}
+        <header className="mb-10 grid gap-6 md:grid-cols-[1.5fr_1fr]">
+          <div className="flex flex-col justify-center">
+            <p className="mb-5 text-[10px] font-bold uppercase tracking-[0.28em] text-amber-500">
+              Atreyus CutSheet Demo
+            </p>
+            <h1 className="mb-4 text-4xl font-black leading-[1.05] tracking-tight text-zinc-50 sm:text-5xl">
+              Deck scope in.<br className="hidden sm:block" />
+              Lumber order out.
             </h1>
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-700">
-              This staged flow calls Claude-backed extraction first, optimizes the returned cuts in the browser, then sends both artifacts to the Claude-backed estimator summary endpoint. Each completed upstream stage remains visible if a downstream stage fails.
+            <p className="max-w-[52ch] text-base leading-relaxed text-zinc-400">
+              Describe a deck in plain English. Claude extracts every cut,
+              the browser packs boards against stock fixtures, Claude writes
+              the estimator summary.
             </p>
           </div>
-          <div className="rounded-3xl border border-slate-200 bg-slate-950 p-5 text-white shadow-inner">
-            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-blue-200">Run status</p>
-            <div className="mt-4 rounded-2xl bg-white/10 p-3">
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-100">Current phase</p>
-              <p className="mt-1 text-2xl font-black capitalize">{phase}</p>
-              {error ? (
-                <p className="mt-2 text-sm font-semibold text-red-200">
-                  Failed during {error.phase}: {error.code}
-                </p>
-              ) : null}
-            </div>
-            <div className="mt-5 grid gap-3">
-              {STAGES.map((stage, index) => (
-                <div key={stage.title} className="flex gap-3 rounded-2xl bg-white/10 p-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-400 text-sm font-black text-slate-950">
-                    {index + 1}
-                  </div>
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-100">{stage.eyebrow}</p>
-                      <StageStatusBadge active={phase === stage.phase} complete={completedStages[stage.phase]} failed={error?.phase === stage.phase} />
-                    </div>
-                    <p className="font-semibold">{stage.title}</p>
-                    <p className="text-sm leading-6 text-slate-300">{stage.detail}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+
+          <RunStatusPanel
+            phase={phase}
+            error={error}
+            isRunning={isRunning}
+            completedStages={completedStages}
+          />
         </header>
 
-        <section className="rounded-[2rem] border border-white/80 bg-white/85 p-5 shadow-lg shadow-slate-200/70 backdrop-blur md:p-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        {/* ── Input ── */}
+        <section className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-5 md:p-6">
+          <div className="mb-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p className="text-sm font-bold uppercase tracking-[0.24em] text-slate-500">Input</p>
-              <h2 className="mt-2 text-2xl font-black tracking-tight">Deck scope</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Empty input is blocked locally. A run performs exactly two sequential API requests: extract, then summarize after browser optimization succeeds.
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">
+                Input
               </p>
+              <h2 className="text-xl font-black tracking-tight text-zinc-100">Deck scope</h2>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap gap-2.5">
               <button
                 type="button"
                 onClick={handleLoadSample}
                 disabled={isRunning}
-                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-full border border-zinc-700 px-4 py-2 text-sm font-semibold text-zinc-400 transition-all hover:border-zinc-500 hover:text-zinc-200 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
               >
-                Load sample scope
+                Load sample
               </button>
               <button
                 type="button"
                 onClick={handleRun}
                 disabled={isRunning}
-                className="rounded-full bg-blue-700 px-5 py-2 text-sm font-black text-white shadow-lg shadow-blue-700/20 transition hover:bg-blue-800 disabled:cursor-wait disabled:bg-blue-400"
+                className="rounded-full bg-amber-500 px-5 py-2 text-sm font-black text-zinc-950 transition-all hover:bg-amber-400 active:scale-[0.97] disabled:cursor-wait disabled:bg-zinc-700 disabled:text-zinc-500"
               >
-                {isRunning ? "Running staged flow…" : "Run staged flow"}
+                {isRunning ? "Running…" : "Run staged flow"}
               </button>
             </div>
           </div>
           <textarea
             value={scopeText}
-            onChange={(event) => setScopeText(event.target.value)}
-            className="mt-5 min-h-36 w-full resize-y rounded-3xl border border-slate-200 bg-white p-4 text-base leading-7 text-slate-800 outline-none ring-blue-500/20 transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-4"
+            onChange={(e) => setScopeText(e.target.value)}
+            className="min-h-32 w-full resize-y rounded-xl border border-zinc-800 bg-zinc-950 p-4 text-sm leading-7 text-zinc-200 outline-none transition-colors placeholder:text-zinc-600 focus:border-amber-500/50 focus:ring-2 focus:ring-amber-500/10 disabled:opacity-50"
             aria-label="Deck scope"
-            placeholder="Describe the deck scope to estimate..."
+            placeholder="Describe the deck scope to estimate…"
             disabled={isRunning}
           />
-          {validationMessage ? (
-            <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert">
+          {validationMessage && (
+            <div
+              className="mt-3 rounded-xl border border-red-800 bg-red-950/40 px-4 py-3 text-sm font-semibold text-red-300"
+              role="alert"
+            >
               {validationMessage}
             </div>
-          ) : null}
+          )}
         </section>
 
-        {error ? <ErrorPanel error={error} hasExtraction={Boolean(extraction)} hasOptimization={Boolean(optimization)} /> : null}
+        {/* ── Flow error ── */}
+        {error && (
+          <ErrorBanner
+            error={error}
+            hasExtraction={Boolean(extraction)}
+            hasOptimization={Boolean(optimization)}
+          />
+        )}
 
-        {extraction ? (
-          <div className="grid gap-8">
-            <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/60 md:p-6">
-              <StageHeading eyebrow="Stage 01" title="Claude extraction" detail="Validated response from /api/extract." />
-              <div className="mt-6 grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-                <div className="overflow-x-auto rounded-3xl border border-slate-200">
-                  <table className="w-full min-w-[720px] text-left text-sm">
-                    <thead className="bg-slate-100 text-xs uppercase tracking-[0.16em] text-slate-500">
-                      <tr>
-                        <th className="px-4 py-3">Cut</th>
-                        <th className="px-4 py-3">Size</th>
-                        <th className="px-4 py-3">Length</th>
-                        <th className="px-4 py-3">Qty</th>
-                        <th className="px-4 py-3">Source</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {extraction.cuts.map((cut) => (
-                        <tr key={cut.id} className="align-top">
-                          <td className="px-4 py-4">
-                            <p className="font-bold text-slate-900">{cut.label}</p>
-                            {cut.notes ? <p className="mt-1 text-xs leading-5 text-slate-500">{cut.notes}</p> : null}
-                          </td>
-                          <td className="px-4 py-4 font-semibold">{cut.nominalSize}</td>
-                          <td className="px-4 py-4">{formatFeetInches(cut.lengthInches)}</td>
-                          <td className="px-4 py-4">{cut.quantity}</td>
-                          <td className="px-4 py-4 capitalize">{cut.source}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="grid content-start gap-4">
-                  <InfoPanel title="Assumptions">
-                    {extraction.assumptions.length ? (
-                      <ul className="grid gap-3">
-                        {extraction.assumptions.map((assumption) => (
-                          <li key={assumption.id} className="rounded-2xl bg-slate-50 p-3">
-                            <p className="font-bold">{assumption.label}</p>
-                            <p className="mt-1 text-sm leading-6 text-slate-600">{assumption.detail}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <EmptyState>No extraction assumptions returned.</EmptyState>
-                    )}
-                  </InfoPanel>
-                  <InfoPanel title="Extraction warnings">
-                    {extraction.warnings.length ? (
-                      <ul className="grid gap-2 text-sm leading-6 text-slate-700">
-                        {extraction.warnings.map((warning) => (
-                          <li key={warning}>• {warning}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <EmptyState>No extraction warnings returned.</EmptyState>
-                    )}
-                  </InfoPanel>
-                </div>
-              </div>
-            </section>
-
-            {optimization ? <OptimizationSection optimization={optimization} /> : null}
-            {summary ? <SummarySection summary={summary} /> : null}
+        {/* ── Stage results ── */}
+        {extraction && (
+          <div className="anim-fade-up space-y-10">
+            <ExtractionSection extraction={extraction} />
+            {optimization && <OptimizationSection optimization={optimization} />}
+            {summary && <SummarySection summary={summary} />}
           </div>
-        ) : null}
+        )}
       </div>
-    </main>
+    </div>
   );
 }
 
-function StageStatusBadge({ active, complete, failed }: { active: boolean; complete: boolean; failed: boolean }) {
-  const label = failed ? "failed" : complete ? "complete" : active ? "running" : "pending";
-  const classes = failed
-    ? "bg-red-200 text-red-950"
-    : complete
-      ? "bg-emerald-200 text-emerald-950"
-      : active
-        ? "bg-blue-200 text-blue-950"
-        : "bg-white/15 text-slate-300";
+// ── Run Status Panel ───────────────────────────────────────────────────────────
 
-  return <span className={`rounded-full px-2 py-0.5 text-[0.65rem] font-black uppercase tracking-[0.14em] ${classes}`}>{label}</span>;
-}
+function RunStatusPanel({
+  phase,
+  error,
+  isRunning,
+  completedStages,
+}: {
+  phase: CutSheetPhase;
+  error: CutSheetStageError | null;
+  isRunning: boolean;
+  completedStages: Record<"extracting" | "optimizing" | "summarizing", boolean>;
+}) {
+  const allDone = completedStages.summarizing;
 
-function ErrorPanel({ error, hasExtraction, hasOptimization }: { error: CutSheetStageError; hasExtraction: boolean; hasOptimization: boolean }) {
+  const phaseColor = isRunning
+    ? "text-amber-400"
+    : phase === "error"
+    ? "text-red-400"
+    : allDone
+    ? "text-emerald-400"
+    : "text-zinc-500";
+
   return (
-    <section className="rounded-[2rem] border border-red-200 bg-red-50 p-5 shadow-lg shadow-red-100/60 md:p-6" role="alert">
-      <p className="text-sm font-black uppercase tracking-[0.24em] text-red-700">Flow failed</p>
-      <h2 className="mt-2 text-2xl font-black tracking-tight text-red-950">{error.phase} stage stopped the run.</h2>
-      <div className="mt-4 grid gap-3 text-sm leading-6 text-red-950 md:grid-cols-[0.7fr_1.3fr]">
-        <div className="rounded-2xl border border-red-200 bg-white/70 p-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-red-600">Stable code</p>
-          <p className="mt-1 font-mono text-sm font-bold">{error.code}</p>
-        </div>
-        <div className="rounded-2xl border border-red-200 bg-white/70 p-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-red-600">Message</p>
-          <p className="mt-1 font-semibold">{error.message}</p>
-        </div>
-      </div>
-      <p className="mt-4 text-sm font-semibold leading-6 text-red-900">
-        Upstream preservation: extraction {hasExtraction ? "is visible below" : "did not complete"}; optimization {hasOptimization ? "is visible below" : "did not complete"}. Provider internals, raw responses, stack traces, and API keys are not shown in the browser.
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-5">
+      <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">
+        Run status
       </p>
-    </section>
+
+      <div className="mb-5 flex items-center gap-2.5">
+        <span
+          className={`h-2 w-2 flex-shrink-0 rounded-full ${
+            isRunning
+              ? "bg-amber-500 pulse-amber"
+              : phase === "error"
+              ? "bg-red-500"
+              : allDone
+              ? "bg-emerald-500"
+              : "bg-zinc-700"
+          }`}
+        />
+        <p className={`text-xl font-black capitalize tracking-tight ${phaseColor}`}>{phase}</p>
+        {error && (
+          <span className="rounded-full bg-red-950 px-2 py-0.5 font-mono text-[10px] font-bold text-red-400">
+            {error.code}
+          </span>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        {STAGES.map((stage, i) => {
+          const isActive   = phase === stage.phase;
+          const isComplete = completedStages[stage.phase];
+          const isFailed   = error?.phase === stage.phase;
+
+          return (
+            <div
+              key={stage.phase}
+              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
+                isActive
+                  ? "border border-amber-500/20 bg-amber-500/[0.08]"
+                  : isComplete
+                  ? "border border-emerald-500/10 bg-emerald-500/[0.04]"
+                  : isFailed
+                  ? "border border-red-500/20 bg-red-500/[0.08]"
+                  : "border border-transparent"
+              }`}
+            >
+              <span
+                className={`font-mono text-xs font-black tabular-nums ${
+                  isActive
+                    ? "text-amber-400"
+                    : isComplete
+                    ? "text-emerald-400"
+                    : isFailed
+                    ? "text-red-400"
+                    : "text-zinc-600"
+                }`}
+              >
+                0{i + 1}
+              </span>
+              <span
+                className={`flex-1 text-sm ${
+                  isActive
+                    ? "font-semibold text-zinc-200"
+                    : isComplete
+                    ? "text-zinc-300"
+                    : isFailed
+                    ? "text-red-300"
+                    : "text-zinc-600"
+                }`}
+              >
+                {stage.label}
+              </span>
+              <StageBadge active={isActive} complete={isComplete} failed={isFailed} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-function OptimizationSection({ optimization }: { optimization: OptimizationResult }) {
-  return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/60 md:p-6">
-      <StageHeading eyebrow="Stage 02" title="Browser optimization" detail="Real optimizeCuts(extraction.cuts) output rendered for review." />
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="Material cost" value={formatCurrency(optimization.totals.materialCost)} />
-        <Metric label="Boards to buy" value={optimization.totals.boards.toString()} />
-        <Metric label="Placed cuts" value={`${optimization.totals.placedCuts}/${optimization.totals.requiredCuts}`} />
-        <Metric label="Waste" value={formatPercent(optimization.totals.wastePercent)} detail={formatFeetInches(optimization.totals.wasteInches)} />
-      </div>
+// ── Error Banner ───────────────────────────────────────────────────────────────
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[0.8fr_1.2fr]">
-        <div className="grid content-start gap-5">
-          <InfoPanel title="Purchase list">
-            {optimization.purchaseList.length ? (
-              <div className="grid gap-3">
-                {optimization.purchaseList.map((line) => (
-                  <div key={line.stockId} className="flex items-start justify-between gap-4 rounded-2xl border border-slate-100 bg-slate-50 p-3">
-                    <div>
-                      <p className="font-bold">{line.label}</p>
-                      <p className="text-sm text-slate-600">
-                        {line.quantity} × {formatCurrency(line.unitCost)} · {formatFeetInches(line.lengthInches)}
-                      </p>
-                    </div>
-                    <p className="font-black">{formatCurrency(line.totalCost)}</p>
+function ErrorBanner({
+  error,
+  hasExtraction,
+  hasOptimization,
+}: {
+  error: CutSheetStageError;
+  hasExtraction: boolean;
+  hasOptimization: boolean;
+}) {
+  return (
+    <div className="mb-8 rounded-2xl border border-red-800 bg-red-950/25 p-5 md:p-6" role="alert">
+      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.22em] text-red-500">
+        Flow failed
+      </p>
+      <h2 className="mb-4 text-2xl font-black tracking-tight text-red-200">
+        {error.phase} stage stopped the run.
+      </h2>
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-xl border border-red-800/40 bg-red-950/50 p-3">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-red-500">
+            Error code
+          </p>
+          <p className="font-mono text-sm font-bold text-red-300">{error.code}</p>
+        </div>
+        <div className="rounded-xl border border-red-800/40 bg-red-950/50 p-3">
+          <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] text-red-500">
+            Message
+          </p>
+          <p className="text-sm font-semibold text-red-300">{error.message}</p>
+        </div>
+      </div>
+      <p className="text-xs leading-6 text-red-400/70">
+        Extraction {hasExtraction ? "preserved below" : "did not complete"} · Optimization{" "}
+        {hasOptimization ? "preserved below" : "did not complete"} · No API keys, stack
+        traces, or raw responses are exposed in the browser.
+      </p>
+    </div>
+  );
+}
+
+// ── Stage 01 — Extraction ──────────────────────────────────────────────────────
+
+function ExtractionSection({ extraction }: { extraction: ExtractionResult }) {
+  return (
+    <section>
+      <SectionHeader eyebrow="Stage 01" title="Claude extraction" />
+      <div className="mt-5 grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
+
+        {/* Cuts table */}
+        <div className="overflow-x-auto rounded-2xl border border-zinc-800">
+          <table className="w-full min-w-[580px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-zinc-800 bg-zinc-900">
+                {["Cut", "Size", "Length", "Qty", "Source"].map((h) => (
+                  <th
+                    key={h}
+                    className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500"
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800/50 bg-zinc-950">
+              {extraction.cuts.map((cut) => (
+                <tr key={cut.id} className="align-top transition-colors hover:bg-zinc-900/60">
+                  <td className="px-4 py-3.5">
+                    <p className="font-semibold text-zinc-100">{cut.label}</p>
+                    {cut.notes && (
+                      <p className="mt-0.5 text-xs leading-5 text-zinc-500">{cut.notes}</p>
+                    )}
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <span className="rounded-md bg-zinc-800 px-1.5 py-0.5 font-mono text-xs font-bold text-zinc-300">
+                      {cut.nominalSize}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 font-mono text-sm text-zinc-300">
+                    {formatFeetInches(cut.lengthInches)}
+                  </td>
+                  <td className="px-4 py-3.5 font-black text-zinc-100">{cut.quantity}</td>
+                  <td className="px-4 py-3.5 text-xs capitalize text-zinc-500">{cut.source}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Assumptions + Warnings */}
+        <div className="flex flex-col gap-4">
+          <Panel title="Assumptions">
+            {extraction.assumptions.length ? (
+              <div className="space-y-2.5">
+                {extraction.assumptions.map((a) => (
+                  <div key={a.id} className="rounded-xl border border-zinc-800 bg-zinc-950 p-3">
+                    <p className="text-sm font-bold text-zinc-200">{a.label}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-zinc-500">{a.detail}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <EmptyState>No stock purchases were produced.</EmptyState>
+              <EmptyState>No assumptions returned.</EmptyState>
             )}
-          </InfoPanel>
+          </Panel>
 
-          <InfoPanel title="Manual review / unplaced cuts">
+          {extraction.warnings.length > 0 && (
+            <div className="rounded-2xl border border-amber-800/40 bg-amber-950/20 p-4">
+              <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-amber-600">
+                Warnings
+              </p>
+              <ul className="space-y-1.5">
+                {extraction.warnings.map((w) => (
+                  <li key={w} className="text-xs leading-5 text-amber-300/80">
+                    — {w}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Stage 02 — Optimization ───────────────────────────────────────────────────
+
+function OptimizationSection({ optimization }: { optimization: OptimizationResult }) {
+  return (
+    <section>
+      <SectionHeader eyebrow="Stage 02" title="Browser optimization" />
+
+      {/* Metrics */}
+      <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <MetricCell label="Material cost" value={formatCurrency(optimization.totals.materialCost)} />
+        <MetricCell label="Boards to buy" value={optimization.totals.boards.toString()} />
+        <MetricCell
+          label="Placed cuts"
+          value={`${optimization.totals.placedCuts}/${optimization.totals.requiredCuts}`}
+        />
+        <MetricCell
+          label="Waste"
+          value={formatPercent(optimization.totals.wastePercent)}
+          sub={formatFeetInches(optimization.totals.wasteInches)}
+        />
+      </div>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-[0.72fr_1.28fr]">
+
+        {/* Purchase list + unplaced */}
+        <div className="flex flex-col gap-4">
+          <Panel title="Purchase list">
+            {optimization.purchaseList.length ? (
+              <div className="space-y-2">
+                {optimization.purchaseList.map((line) => (
+                  <div
+                    key={line.stockId}
+                    className="flex items-center justify-between gap-4 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5"
+                  >
+                    <div>
+                      <p className="text-sm font-bold text-zinc-100">{line.label}</p>
+                      <p className="mt-0.5 text-xs text-zinc-500">
+                        {line.quantity} × {formatCurrency(line.unitCost)} ·{" "}
+                        {formatFeetInches(line.lengthInches)}
+                      </p>
+                    </div>
+                    <p className="shrink-0 font-mono text-sm font-black text-amber-400">
+                      {formatCurrency(line.totalCost)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState>No stock purchases produced.</EmptyState>
+            )}
+          </Panel>
+
+          <div
+            className={`rounded-2xl border p-4 ${
+              optimization.unplacedCuts.length === 0
+                ? "border-emerald-800/30 bg-emerald-950/15"
+                : "border-amber-800/30 bg-amber-950/15"
+            }`}
+          >
+            <p
+              className={`mb-3 text-[10px] font-black uppercase tracking-[0.2em] ${
+                optimization.unplacedCuts.length === 0 ? "text-emerald-600" : "text-amber-600"
+              }`}
+            >
+              Unplaced cuts
+            </p>
             {optimization.unplacedCuts.length === 0 ? (
-              <p className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold leading-6 text-emerald-800">
-                No unplaced cuts in this run. Keep this panel visible so oversize, malformed, or unsupported future cuts have a deterministic review surface.
+              <p className="text-xs font-semibold text-emerald-400">
+                All cuts placed successfully.
               </p>
             ) : (
-              <ul className="grid gap-3">
+              <ul className="space-y-2">
                 {optimization.unplacedCuts.map((cut) => (
-                  <li key={`${cut.requiredCutId}-${cut.reason}`} className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-950">
-                    <p className="font-black">{cut.label}</p>
-                    <p>{cut.message}</p>
+                  <li
+                    key={`${cut.requiredCutId}-${cut.reason}`}
+                    className="rounded-xl border border-amber-800/30 bg-amber-950/30 p-3"
+                  >
+                    <p className="text-xs font-black text-amber-300">{cut.label}</p>
+                    <p className="mt-0.5 text-xs text-amber-400/70">{cut.message}</p>
                   </li>
                 ))}
               </ul>
             )}
-          </InfoPanel>
+          </div>
         </div>
 
-        <div className="grid gap-4">
+        {/* Board layouts with visual cut bars */}
+        <div className="space-y-3">
           {optimization.layouts.map((layout) => (
-            <article key={layout.id} className="rounded-3xl border border-slate-200 p-4">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <article
+              key={layout.id}
+              className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4"
+            >
+              <div className="mb-3 flex items-start justify-between gap-4">
                 <div>
-                  <h3 className="font-black text-slate-950">{layout.stock.label}</h3>
-                  <p className="text-sm text-slate-600">
-                    Used {formatFeetInches(layout.usedInches)} · Leftover {formatFeetInches(layout.wasteInches)} · {formatCurrency(layout.cost)}
+                  <p className="text-sm font-black text-zinc-100">{layout.stock.label}</p>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Used {formatFeetInches(layout.usedInches)} · Waste{" "}
+                    {formatFeetInches(layout.wasteInches)} · {formatCurrency(layout.cost)}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-slate-600">
+                <span className="shrink-0 rounded-md bg-zinc-800 px-2 py-1 font-mono text-[10px] text-zinc-500">
                   {layout.id}
                 </span>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+
+              {/* Visual board bar — colour coded by cut source */}
+              <div className="flex h-5 overflow-hidden rounded-lg bg-zinc-800">
                 {layout.placedCuts.map((cut) => (
-                  <span key={`${layout.id}-${cut.requiredCutId}-${cut.instance}`} className="rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-950">
-                    {cut.label} #{cut.instance} · {formatFeetInches(cut.lengthInches)}
+                  <div
+                    key={`${cut.requiredCutId}-${cut.instance}`}
+                    style={{
+                      width: `${(cut.lengthInches / layout.stock.lengthInches) * 100}%`,
+                      backgroundColor: SOURCE_COLORS[cut.source],
+                      opacity: 0.72,
+                    }}
+                    className="h-full border-r border-zinc-900 last:border-r-0 transition-opacity hover:opacity-100"
+                    title={`${cut.label} · ${formatFeetInches(cut.lengthInches)}`}
+                  />
+                ))}
+                {layout.wasteInches > 0 && (
+                  <div
+                    style={{
+                      width: `${(layout.wasteInches / layout.stock.lengthInches) * 100}%`,
+                    }}
+                    className="h-full bg-zinc-700/50"
+                    title={`Waste · ${formatFeetInches(layout.wasteInches)}`}
+                  />
+                )}
+              </div>
+
+              {/* Cut chips */}
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                {layout.placedCuts.map((cut) => (
+                  <span
+                    key={`${cut.requiredCutId}-${cut.instance}`}
+                    className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs font-semibold text-zinc-300"
+                  >
+                    {cut.label} #{cut.instance}
+                    <span className="ml-1 text-zinc-500">· {formatFeetInches(cut.lengthInches)}</span>
                   </span>
                 ))}
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
-                  leftover · {formatFeetInches(layout.wasteInches)}
+                <span className="rounded-full bg-zinc-800 px-2.5 py-1 text-xs text-zinc-600">
+                  waste · {formatFeetInches(layout.wasteInches)}
                 </span>
               </div>
             </article>
@@ -365,83 +586,150 @@ function OptimizationSection({ optimization }: { optimization: OptimizationResul
   );
 }
 
+// ── Stage 03 — Summary ────────────────────────────────────────────────────────
+
 function SummarySection({ summary }: { summary: EstimatorSummary }) {
   return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-lg shadow-slate-200/60 md:p-6">
-      <StageHeading eyebrow="Stage 03" title={summary.title} detail={summary.overview} />
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
-        <InfoPanel title="Cost guidance">
-          <div className="grid gap-3">
+    <section>
+      <SectionHeader eyebrow="Stage 03" title={summary.title} detail={summary.overview} />
+      <div className="mt-5 grid gap-5 lg:grid-cols-3">
+
+        <Panel title="Cost guidance">
+          <div className="space-y-2.5">
             {summary.materialLines.map((line) => (
-              <div key={line.id} className="rounded-2xl bg-slate-50 p-3">
-                <div className="flex items-start justify-between gap-4">
-                  <p className="font-bold">{line.label}</p>
-                  <p className="font-black">{formatCurrency(line.totalCost)}</p>
+              <div
+                key={line.id}
+                className="rounded-xl border border-zinc-800 bg-zinc-950 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-sm font-bold text-zinc-200">{line.label}</p>
+                  <p className="shrink-0 font-mono text-sm font-black text-amber-400">
+                    {formatCurrency(line.totalCost)}
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-0.5 text-xs text-zinc-500">
                   {line.quantity} {line.unit} at {formatCurrency(line.unitCost)}
                 </p>
               </div>
             ))}
           </div>
-        </InfoPanel>
-        <InfoPanel title="Labor notes">
-          <ul className="grid gap-3 text-sm leading-6 text-slate-700">
+        </Panel>
+
+        <Panel title="Labor notes">
+          <ul className="space-y-2.5">
             {summary.laborNotes.map((note) => (
-              <li key={note} className="rounded-2xl bg-slate-50 p-3">
+              <li
+                key={note}
+                className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-xs leading-5 text-zinc-400"
+              >
                 {note}
               </li>
             ))}
           </ul>
-        </InfoPanel>
-        <InfoPanel title="Double-checks">
-          <div className="grid gap-3">
-            {summary.doubleChecks.map((item) => (
-              <div key={item.id} className={`rounded-2xl border p-3 ${severityStyles[item.severity]}`}>
-                <p className="text-xs font-black uppercase tracking-[0.16em]">{item.severity}</p>
-                <p className="mt-1 font-black">{item.title}</p>
-                <p className="mt-1 text-sm leading-6">{item.detail}</p>
-              </div>
-            ))}
+        </Panel>
+
+        <Panel title="Double-checks">
+          <div className="space-y-2.5">
+            {summary.doubleChecks.map((item) => {
+              const s = SEVERITY_STYLES[item.severity];
+              return (
+                <div key={item.id} className={`rounded-xl border p-3 ${s.wrap}`}>
+                  <p className="mb-1 text-[10px] font-black uppercase tracking-[0.16em] opacity-60">
+                    {s.label}
+                  </p>
+                  <p className="text-sm font-black">{item.title}</p>
+                  <p className="mt-1 text-xs leading-5 opacity-75">{item.detail}</p>
+                </div>
+              );
+            })}
           </div>
-        </InfoPanel>
+        </Panel>
       </div>
-      <p className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm font-semibold leading-6 text-slate-600">
+
+      <p className="mt-5 rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-4 text-xs leading-6 text-zinc-500">
         {summary.disclaimer}
       </p>
     </section>
   );
 }
 
-function StageHeading({ eyebrow, title, detail }: { eyebrow: string; title: string; detail: string }) {
+// ── Shared primitives ─────────────────────────────────────────────────────────
+
+function SectionHeader({
+  eyebrow,
+  title,
+  detail,
+}: {
+  eyebrow: string;
+  title: string;
+  detail?: string;
+}) {
   return (
     <div>
-      <p className="text-sm font-black uppercase tracking-[0.24em] text-blue-700">{eyebrow}</p>
-      <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">{title}</h2>
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{detail}</p>
+      <p className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-amber-500">
+        {eyebrow}
+      </p>
+      <h2 className="text-2xl font-black tracking-tight text-zinc-50 sm:text-3xl">{title}</h2>
+      {detail && (
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-500">{detail}</p>
+      )}
     </div>
   );
 }
 
-function Metric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function MetricCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-500">{label}</p>
-      <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{value}</p>
-      {detail ? <p className="mt-1 text-sm font-semibold text-slate-500">{detail}</p> : null}
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3.5">
+      <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">
+        {label}
+      </p>
+      <p className="font-mono text-2xl font-black tracking-tight text-zinc-50">{value}</p>
+      {sub && <p className="mt-0.5 text-xs text-zinc-500">{sub}</p>}
     </div>
   );
 }
 
-function InfoPanel({ title, children }: { title: string; children: ReactNode }) {
+function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4">
-      <h3 className="text-sm font-black uppercase tracking-[0.18em] text-slate-500">{title}</h3>
-      <div className="mt-3">{children}</div>
-    </section>
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+      <p className="mb-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
+function StageBadge({
+  active,
+  complete,
+  failed,
+}: {
+  active: boolean;
+  complete: boolean;
+  failed: boolean;
+}) {
+  const label = failed ? "failed" : complete ? "done" : active ? "running" : "pending";
+  const cls = failed
+    ? "bg-red-950 text-red-400"
+    : complete
+    ? "bg-emerald-950 text-emerald-400"
+    : active
+    ? "bg-amber-950 text-amber-400"
+    : "bg-zinc-800 text-zinc-600";
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-[0.6rem] font-black uppercase tracking-wider ${cls}`}
+    >
+      {label}
+    </span>
   );
 }
 
 function EmptyState({ children }: { children: ReactNode }) {
-  return <p className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm font-semibold leading-6 text-slate-600">{children}</p>;
+  return (
+    <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-3 text-xs leading-5 text-zinc-600">
+      {children}
+    </p>
+  );
 }
