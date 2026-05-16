@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800;900&family=Geist+Mono:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
@@ -17,9 +17,9 @@ html {
 body {
   min-height: 100%;
   margin: 0;
-  background: #09090b;
-  color: #fafafa;
-  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  background: #0d0d0d;
+  color: #e8e8e8;
+  font-family: 'Geist', system-ui, -apple-system, sans-serif;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -35,8 +35,8 @@ button {
 
 button:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgb(245 158 11 / 0.5);
-  outline-offset: 2px;
+  outline: 1px solid rgb(245 158 11 / 0.7);
+  outline-offset: 1px;
 }
 
 a {
@@ -47,28 +47,18 @@ a {
 /* ── Animations ── */
 
 @keyframes fade-up {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes pulse-amber {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.25; }
+  50%       { opacity: 0.2; }
 }
 
 .anim-fade-up {
-  animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fade-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-
-.anim-stagger-1 { animation-delay: 60ms; }
-.anim-stagger-2 { animation-delay: 120ms; }
-.anim-stagger-3 { animation-delay: 180ms; }
 
 .pulse-amber {
   animation: pulse-amber 1.8s ease-in-out infinite;
