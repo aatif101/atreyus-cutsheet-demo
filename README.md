@@ -20,17 +20,16 @@ Quick honesty before I go further — I'm not a construction person. I had to lo
 
 ## What I'm actually showing you
 
-I want to be straight about this: **this is not a finished product. It's an idea, built in a weekend.** I don't think the idea itself is groundbreaking, and a real version would need a lot more than I have here — live supplier pricing, building codes, regional labor rates, and frankly your actual data and domain knowledge.
+I want to be straight about this: **this is not a finished product. It's an idea, built in a day.** I don't think the idea itself is groundbreaking, and a real version would need a lot more than I have here — live supplier pricing, building codes, regional labor rates, and frankly your actual data and domain knowledge.
 
-What I'm trying to show isn't the idea. It's how I think about turning a messy real-world problem into a small, shippable feature.
 
-I built this on purpose as something that could be **a feature or an agent skill inside a bigger platform** — not a standalone app. The pipeline below is the kind of thing that could slot into a product surface like CutSheet, or get wired up as a reusable skill in a Workflows-style agent builder. I don't know what your CutSheet actually does — I built this blind. The point isn't "I rebuilt your product." The point is "this is how I'd approach building inside it, and I'd love to see the real thing."
+
+I built this on purpose as something that could be **a feature or an agent skill inside a bigger platform** — not a standalone app. The pipeline below is the kind of thing that could slot into a product surface like CutSheet, or get wired up as a reusable skill in a Workflows-style agent builder. I don't know what your CutSheet actually does, I built this blind. The point is "this is how I'd approach building inside your product, and I'd love to see the real thing."
 
 ---
 
 ## How it works
 
-The technical version, kept short — it's a 3-stage pipeline:
 
 1. **Claude reads the scope** — AI parses the plain-English description into structured cut requirements (sizes, quantities, lumber types).
 2. **The browser does the math** — A bin-packing algorithm (First Fit Decreasing) figures out how to fit all those cuts onto standard stock boards with minimum waste.
@@ -48,7 +47,7 @@ If this were real, the directions I'd push it:
 
 - **Plug into software contractors already use.** The plain-English-to-cut-list step doesn't have to be its own screen. It could be an agent skill that feeds an estimating tool, a takeoff app, or whatever system a contractor already runs all day — the AI does the messy translation, the existing software does what it's good at.
 - **Real pricing.** Swap the hardcoded demo prices for live supplier feeds, and the output stops being an estimate and starts being a quote.
-- **Beyond decks.** The same extract → optimize → summarize pattern works for framing, fencing, railing — anything that's linear material cut to length. The pipeline doesn't care that it's a deck; that's just what I scoped the demo to.
+- **Beyond decks.** The same extract → optimize → summarize pattern works for framing, fencing, railing, anything that's linear material cut to length. The pipeline doesn't care that it's a deck; that's just what I scoped the demo to.
 - **As a reusable pattern, not one feature.** Extraction → optimization → summary is a *shape*. Inside a platform, that shape could be a skill other workflows call on demand, not a single hardcoded flow.
 
 That last one is really the pitch. I didn't build a deck app. I built one small, honest example of a pattern I think shows up all over a platform like yours.
